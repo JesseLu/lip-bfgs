@@ -16,7 +16,7 @@ Why use LIP-BFGS?
 1.  LIP-BFGS is easy to modify. 
     The algorithm and implementation are simple and well-documented.
 1.  LIP-BFGS is free. 
-    Free as in public domain (see License), use and modify as you will.
+    Free as in public domain (see License), you can use it in any way you like.
 
 
 Installing and running LIP-BFGS
