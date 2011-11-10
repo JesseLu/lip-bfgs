@@ -29,4 +29,4 @@ u = ones(n, 1);
 
 subplot 111;
 lip_bfgs(fun, 0.5 * ones(n, 1), l, u, A_eq, b_eq, ...
-    1, 0.1, 0.995, 10, 0.01, 0.5, err_tol);
+    1, 0.1, 0.995, 1, 1e-4, 0.5, err_tol, 1e-6);

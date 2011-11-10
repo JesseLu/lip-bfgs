@@ -58,8 +58,7 @@ Using LIP-BFGS
 LIP-BFGS only requires the following input parameters:
 
 1.  _x_, a vector of length _n_. The initial value for the optimization.
-1.  _f(x)_, the design objective. A function returning a real scalar.
-1.  _g(x)_, the gradient of _f(x)_. 
+1.  _g(x)_, the gradient of the design objective, _f(x)_. 
     A function which returns a vector of length _n_.
 1.  _A_ and _b_, the matrix and vector defining the equality constraint.
     _A_ must be of size _p_ by _n_ and _b_ must be of length _p_.

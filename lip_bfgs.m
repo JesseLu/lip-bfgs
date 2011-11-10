@@ -1,5 +1,5 @@
 function [] = lbfgs_ip(fun, x, l, u, A, b, ...
-                                mu_0, sigma, tau, eta, alpha, beta, err_tol)
+                        mu_0, sigma, tau, eta, alpha, beta, err_tol, t_min)
 % L-BFGS Interior-Point algorithm.
 % Assumes A is skinny and has linearly independent columns.
 
@@ -57,7 +57,6 @@ f2b_rule = @(pz, z) min([1; my_pos(-tau*z./pz)]);
     %
 
 hist.err(1) = err(x, s0, s1, y, z0, z1, 0);
-hist.err_mu(1) = err(x, s0, s1, y, z0, z1, mu_0);
 hist.t(1) = nan;
 n_max = 5;
 h = [];
@@ -88,7 +87,7 @@ while hist.err(end) > err_tol
     % Perform a backtracking (Armijo) line search.
     t = backtrack_linesearch(@(t) ...
         phi(x, s0, s1, y, z0, z1, mu, alpha_prim, alpha_dual, p, t), ...
-        alpha_prim, alpha, beta);
+        alpha_prim, alpha, beta, t_min);
 
     % Update variables.
     x = x + t * alpha_prim * p.x;
@@ -100,45 +99,23 @@ while hist.err(end) > err_tol
 
     % Calculate error.
     hist.err(end+1) = err(x, s0, s1, y, z0, z1, 0);
-    hist.err_mu(end+1) = err(x, s0, s1, y, z0, z1, mu);
     hist.t(end+1) = t;
 
     % Update mu.
-    if (hist.err_mu(end)/(length(x)/eta)<= mu)
-        mu = hist.err_mu(end)/(length(x)/eta);
+    if ((hist.err(end) / (length(x)/eta)) <= mu)
+        mu = hist.err(end) / (length(x)/eta);
     end
 end
 time0 = toc;
 
 % Plot results.
-semilogy(0:length(hist.err)-1, [hist.err; hist.err_mu; hist.t]', '.-');
+semilogy(0:length(hist.err)-1, [hist.err; hist.t]', '.-');
 xlabel('Error in KKT equations');
 ylabel('iterations');
 title('Interior Primal-Dual Full Newton Step Convergence');
-legend({'global error', 'local error', 'step size'}, -1);
+legend({'global error', 'step size'}, -1);
 drawnow
 
+fprintf('Time: %1.2fs, Final error: %e.\n', time0, hist.err(end));
 
-    %
-    % Compare against cvx.
-    %
-
-tic;
-path(path, genpath('../cvx'));
-cvx_quiet(true);
-cvx_begin
-    variable x_star(length(x))
-    % minimize norm(fun.A*x_star - fun.b)
-    minimize fun.f_cvx(x_star)
-    subject to
-        A * x_star - b == 0
-        x_star >= l
-        x_star <= u
-cvx_end
-time1 = toc;
-
-fprintf('Percent error: %1.7f%% (compared against cvx result)\n',  ...
-    100 * norm(x_star - x)/norm(x_star));
-fprintf('Interior newton, fval: %e, time: %1.2f s\n', fun.f(x), time0);
-fprintf('cvx, fval: %e, time: %1.2f s\n', fun.f(x_star), time1);
 

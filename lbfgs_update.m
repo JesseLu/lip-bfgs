@@ -97,7 +97,7 @@ h.n = n;
 
 % Check curvature condition.
 if ((s' * y) <= 0)
-    error('Curvature condition broken (sk^T yk = %e)!', (s' * y));
+    error('Curvature condition broken (s dot y = %e)!', (s' * y));
     % TODO (safeguard): Replace y (damped update) when condition is broken.
 end
 
