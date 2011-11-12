@@ -1,0 +1,382 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,amsfonts}
+\begin{document}
+\title{LIP-BFGS Theory}
+\author{Jesse Lu}
+\maketitle
+\tableofcontents
+
+\section{Introduction}
+The acronym LIP-BFGS stands for 
+  Limited-memory Interior-Point Broyden-Fletcher-Goldfarb-Shanno.
+It is simply an interior-point (IP) method which uses the 
+  limited-memory BFGS (L-BFGS) algorithm.
+The main body of the algorithm is described in Chapter 19.3 of \cite{NW04}.
+
+The purpose of this document is 
+  to allow the user to understand the accompanying \textsc{Matlab} 
+  implementation.
+
+\part{Theory}
+\section{Theory for the interior-point method}
+Interior-point methods attempt to minimize $f(x)$ 
+    subject to the equality and inequality constraints $c_E(x)$ and $c_I(x)$,
+\begin{subequations}
+\begin{align}
+\text{minimize} \quad & f(x) \\
+\text{subject to} \quad & c_E(x) = 0 \\
+                        & c_I(x) \ge 0,
+\end{align}
+\end{subequations}
+    by satisfying the Karush-Kuhn-Tucker (KKT) conditions
+    (see Chapter 12.3 of \cite{NW04})
+\begin{subequations}\begin{align}
+    \nabla f(x) - A_E^T(x) y - A_I^T(x) z &= 0 \label{Lagrangian} \\
+    z - \mu s^{-1} &= 0 \\
+    c_E(x) &= 0 \\
+    c_I(x) - s &= 0 \\
+    s &\ge 0 \\
+    z &\ge 0,
+\end{align}\end{subequations}
+    where
+\begin{subequations}\begin{align}
+    A_E(x) &= \nabla c_E(x), \quad\text{the Jacobian of $c_E(x)$} \\
+    A_I(x) &= \nabla c_I(x), \quad\text{the Jacobian of $c_I(x)$} 
+\end{align}\end{subequations}
+    $y$ and $z$ are the dual variables for $c_E(x)$ and $c_I(x)$ respectively,
+    and $s$ is the slack variable.
+Note that the expression $s^{-1}$ 
+    refers to the element-wise inverse of the vector $s$.
+Also, the expression in \eqref{Lagrangian} can also be written as
+    $\nabla_x \mathcal{L} = 0$, 
+    where $\mathcal{L}$ is the Lagrangian of the problem.
+
+As taken from Chapter 19.3 of \cite{NW04}, 
+    the interior point method obtains step direction $p$ by solving
+\begin{equation}
+\begin{bmatrix}
+    \nabla^2_{xx}\mathcal{L} & 0 & A_E^T(x) & A_I^T(x) \\
+    0 & \Sigma & 0 & -I \\
+    A_E(x) & 0 & 0 & 0 \\
+    A_I(x) & -I & 0 & 0
+\end{bmatrix}
+\begin{bmatrix} p_x \\ p_s \\ -p_y \\ -p_z \end{bmatrix}
+    = -
+\begin{bmatrix}
+    \nabla f(x) - A_E^T(x) y - A_I^T(x) z \\
+    z - \mu s^{-1} \\
+    c_E(x) \\
+    c_I(x) - s
+\end{bmatrix}.
+\end{equation}
+    where 
+\begin{equation} \Sigma = \text{diag}(z/s).\end{equation}
+This equation can be simplified by 
+    first backsubstituting for $p_s$ and then for $p_z$.
+The reduced system is then
+\begin{multline}
+\begin{bmatrix}
+    \nabla^2_{xx}\mathcal{L} + A_I^T(x) \Sigma A_I^T(x) & A_E^T(x) \\
+    A_E(x) & 0 
+\end{bmatrix}
+\begin{bmatrix} p_x \\ -p_y \end{bmatrix}
+    = -
+\begin{bmatrix}
+    \nabla f(x) - A_E^T(x) y - A_I(x) h \\
+    c_E(x)
+\end{bmatrix},
+\end{multline}
+    where 
+\begin{equation} h = z - \Sigma c_I(x) + \mu s^{-1} \end{equation} 
+    and
+\begin{subequations}\begin{align}
+    p_s &= A_I(x) p_x + c_I(x) - s \\
+    p_z &= -\Sigma A_I(x) p_x - \Sigma c_I(x) + \mu s^{-1}.
+\end{align}\end{subequations}
+
+We now choose to consider only  
+    simple bound inequality constraints $l \le x \le u$, and
+    affine equality constraints $A x - b = 0$.
+Our problem can then be written down as
+\begin{equation}
+\begin{bmatrix}
+    \nabla^2 f(x) + \Sigma_0 + \Sigma_1 & A^T \\
+    A & 0 
+\end{bmatrix}
+\begin{bmatrix} p_x \\ -p_y \end{bmatrix}
+    = -
+\begin{bmatrix}
+    \nabla f(x) - A^T y + h_0 + h_1 \\ A x - b
+\end{bmatrix},
+\label{IP}
+\end{equation}
+    where
+    \begin{subequations}\begin{align}
+    \Sigma_0 &= \text{diag}(z_0 / s_0) \\
+    \Sigma_1 &= \text{diag}(z_1 / s_1),
+    \end{align}\end{subequations}
+    and
+    \begin{subequations}\begin{align}
+    h_0 &= -z_0 + \Sigma_0 (x - l) - \mu s_0^{-1} e \\
+    h_1 &= z_1 - \Sigma_1 (u - x) + \mu s_1^{-1} e, 
+    \end{align}\end{subequations}
+    and the other components of $p$ are
+\begin{subequations}\begin{align}
+    p_{s_0} &= p_x + (x - l) - s_0 \\
+    p_{z_0} &= -\Sigma_0 p_x - \Sigma_0 (x - l) + \mu s_0^{-1} \\
+    p_{s_1} &= -p_x + (u - x) - s_1 \\
+    p_{z_1} &= \Sigma_1 p_x - \Sigma_1 (u - x) + \mu s_1^{-1}.
+\end{align}\label{p_other}\end{subequations}
+
+\section{Theory for the limited-memory BFGS algorithm}
+Practically, computing and solving for $\nabla^2 f(x)$ in \eqref{IP}, 
+    the \emph{Hessian} of $f(x)$, is often computationally challenging.
+For this reason, we use the 
+    limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm
+    to approximate $\nabla^2 f(x)$.
+Specifically, we use the compact or outer-product representation of 
+    \begin{equation} B \sim \nabla^2 f(x), \end{equation}
+    as described in chapter 7.2 of \cite{NW04},
+    to efficiently solve for $p$ in \eqref{IP}.
+
+The BFGS algorithm works by approximating the Hessian of function
+    based on a list of the previous values of $x$ and $\nabla f(x)$.
+The approximate Hessian, $B$, is recursively updated by the following formula,
+    taken from chapter 6.1 of \cite{NW04},
+    \begin{equation}
+    B_{k+1} = B_k - \frac{B_k s_k s_k^T B_k}{s_k^T B_k s_k} +
+            \frac{y_k y_k^T}{y_k^T s_k},
+    \end{equation}
+    where
+    \begin{subequations}\begin{align}
+    s_k &= x_{k+1} - x_k \\
+    y_k &= \nabla f(x_{k+1}) - \nabla f(x_k).
+    \end{align}\end{subequations}
+
+The limited-memory BFGS algorithm simply truncates the list of $(s_k, y_k)$
+    to the most recent $m$ values,
+    which allows us to store $B$ efficiently
+    in what is called the compact or outer-product representation
+    (see chapter 7.2 of \cite{NW04}):
+    \begin{equation}
+    B_k = B_0 - 
+        \begin{bmatrix} B_0 S_k & Y_k \end{bmatrix}
+        \begin{bmatrix}
+            S_k^T B_0 S_k & L_k \\
+            L_k^T & -D_k
+        \end{bmatrix}^{-1}
+        \begin{bmatrix} S_k^T B_0^T \\ Y_k^T \end{bmatrix},
+    \end{equation}
+    where $B_0$ is an initial guess for $B$, 
+    \begin{subequations}\begin{align}
+        S_k &= [s_{k-m}, \ldots, s_{k-1}] \\
+        Y_k &= [y_{k-m}, \ldots, y_{k-1}]
+    \end{align}\end{subequations}
+    and
+    \begin{subequations}\begin{align}
+        (L_k)_{i,j} &= 
+            \begin{cases}
+                s_{i-1}^T y_{j-1} & \text{if $i > j$,} \\
+                0 & \text{otherwise,} 
+            \end{cases} \\
+        D_k &= \text{diag}([s_{k-m}^T y_{k-m}, \ldots, s_{k-1}^T y_{k-1}]).
+    \end{align} \end{subequations}
+
+Specifically, we choose
+    \begin{equation} B_0 = \delta_k I, \end{equation}
+    where $\delta_k$ is a scaling variable, given by
+    \begin{equation} 
+        \delta_k = \frac{y_{k-1}^T y_{k-1}}{s_{k-1}^T y_{k-1}}.
+    \end{equation}
+This results in a computationally-efficient 
+    diagonal-plus-low-rank structure for $B_k$,
+    \begin{equation}
+    B_k = \delta_k I + W_k M_k W_k^T \label{lbfgs}
+    \end{equation}
+    where
+    \begin{subequations}\begin{align}
+        W_k &= \begin{bmatrix} \delta_k S_k & Y_k \end{bmatrix} \\
+        M_k &= 
+            \begin{bmatrix}
+                \delta_k S_k^T S_k & L_k \\
+                L_k^T & -D_k
+            \end{bmatrix}^{-1}.
+    \end{align}\end{subequations}
+
+Lastly, when $k = 0$ and there are no $(s_k, y_k)$ pairs
+    with which to construct $B_k$,
+    we simply choose $B_0 = I$.
+
+
+\section{Efficiently solving an arrow-plus-low-rank system}
+Substituting the expression for $B_k$ in \eqref{lbfgs} for
+    $\nabla^2 f(x)$ in \eqref{IP} yields
+    \begin{multline}
+    \left(
+    \begin{bmatrix}
+        \delta_k I + \Sigma_0 + \Sigma_1 & A^T \\
+        A & 0 
+    \end{bmatrix}
+    +
+    \begin{bmatrix} WM \\ 0 \end{bmatrix}
+    \begin{bmatrix} W^T & 0 \end{bmatrix}
+    \right)
+    \begin{bmatrix} p_x \\ -p_y \end{bmatrix}
+        \\ = -
+    \begin{bmatrix}
+        \nabla f(x) - A^T y + h_0 + h_1 \\ A x - b
+    \end{bmatrix},\label{lipbfgs}
+    \end{multline}
+    which can be efficiently solved by taking advantage of the structure of 
+    the matrix
+    \begin{equation}
+    \begin{bmatrix}
+        \delta_k I + \Sigma_0 + \Sigma_1 & A^T \\
+        A & 0 
+    \end{bmatrix}
+    +
+    \begin{bmatrix} WM \\ 0 \end{bmatrix}
+    \begin{bmatrix} W^T & 0 \end{bmatrix}. \label{aplr}
+    \end{equation}
+
+Such a matrix contains arrow-plus-low-rank structure;
+    in the sense that the 
+    \begin{equation}
+    \begin{bmatrix}
+        \delta_k I + \Sigma_0 + \Sigma_1 & A^T \\
+        A & 0 
+    \end{bmatrix} \label{arrow}
+    \end{equation}
+    term has ``arrow'' structure (pointing down and to the left)
+    especially if $A$ is fat ($A \in \mathbb{R}^{m \times n}, m \ll n$), 
+    and that the 
+    \begin{equation}
+    \begin{bmatrix} WM \\ 0 \end{bmatrix}
+    \begin{bmatrix} W^T & 0 \end{bmatrix}.
+    \end{equation}
+    term is a low-rank matrix.
+
+The arrow matrix can be efficiently solved via block substitution;
+    meaning that we solve
+    \begin{equation}
+    \begin{bmatrix}
+        \tilde{D} & A^T \\
+        A & 0 
+    \end{bmatrix} 
+    \begin{bmatrix} x_1 \\ x_2 \end{bmatrix} 
+    =
+    \begin{bmatrix} b_1 \\ b_2 \end{bmatrix} 
+    \end{equation}
+    where
+    \begin{equation} \tilde{D} = \delta_k I + \Sigma_0 + \Sigma_1 \end{equation}
+    by computing, in order,
+    \begin{subequations}\begin{align}
+    A \tilde{D}^{-1} A^T x_2 &= 
+        A \tilde{D}^{-1} b_1 - b_2 \\
+    x_1 &= \tilde{D}^{-1}
+        (b_1 - A^T x_2).
+    \end{align}\end{subequations}
+This is computationally efficient because the term $A \tilde{D}^{-1} A^T$ is 
+    small, if the number of rows in $A$ is small,
+    and therefore easy to invert.
+
+Now that we can compute $\tilde{A}^{-1} b$, 
+    where $\tilde{A}$ is the arrow matrix in \eqref{arrow},
+    we employ the matrix inversion lemma
+    (also known as the Sherman-Woodbury-Morrison formula),
+    which states
+    \begin{equation}
+    (A+UV^T)^{-1}b = A^{-1}b - A^{-1}U(I + V^T A^{-1}U)^{-1} V^T A^{-1}b,
+    \end{equation}
+    in order to solve the entire arrow-plus-low-rank system in \eqref{aplr},
+    \begin{equation} \tilde{A} + \tilde{U}\tilde{V}^T \end{equation}
+    where
+    \begin{subequations}\begin{align}
+    \tilde{U} &= \begin{bmatrix} WM \\ 0 \end{bmatrix} \\
+    \tilde{V}^T &= \begin{bmatrix} W^T & 0 \end{bmatrix}.
+    \end{align}\end{subequations}
+
+\part{Implementation}
+\section{Outline of LIP-BFGS algorithm}
+LIP-BFGS requires the following input parameters:
+\begin{itemize}
+    \item $\nabla f(x)$,  function on $\mathbb{C}^n \to \mathbb{C}^n$
+        to evaluate gradient at $x$,
+    \item $x \in \mathbb{C}^n$,  initial value of optimization variable,
+    \item $l, u \in \mathbb{R}^n$,  lower and upper bounds on $x$, and
+    \item $A \in \mathbb{C}^{m \times n}, b \in \mathbb{C}^m$, 
+        equality constraint on $x$.
+\end{itemize}
+
+The basic outline of the LIP-BFGS algorithm is:
+\begin{enumerate}
+    \item Determine initial values of $s_{0,1}$, $y$, and $z_{0,1}$,
+    \item Check termination condition; if needed,
+        update $\mu$ and perform steps \ref{start}-\ref{stop},
+
+    \item Form or update $B_k$ using \eqref{lbfgs}, \label{start}
+    \item Compute step-direction $p$ by solving 
+        \eqref{lipbfgs} and \eqref{p_other},
+    \item Perform a line-search to determine step-size along $p$,
+        update $x$, $s_{0,1}$, $y$, and $z_{0,1}$. \label{stop}
+\end{enumerate}
+
+\section{Determining initial values of $s_{0,1}$, $y$, and $z_{0,1}$}
+\section{Termination condition}
+The suggested termination condition from chapter 19.2 of \cite{NW04}
+    is used (with $\mu = 0$),
+    \begin{equation}
+    \text{if } E(x, s_0, s_1, y, z_0, z_1) \le \epsilon_\text{tol}
+    \text{ then terminate,}
+    \end{equation}
+    where
+    \begin{multline}
+    E(x, s_0, s_1, y, z_0, z_1) = \text{max}\{ 
+        \| \nabla f(x) - A^T y - z_0 + z_1 \|, \\
+        \| s_0 z_0 \|, 
+        \| s_1 z_1 \|, 
+        \| A x - b \|, 
+        \|(x - l) - s_0 \|, 
+        \|(u - x) - s_1 \| \},
+    \end{multline}
+    and $s_0 z_0$, $s_1 z_1$ are element-wise vector products.
+
+
+\section{L-BFGS update of $B_k$}
+\section{Computing step direction $p$}
+\section{Line-search and variable update}
+    
+Lastly, inspired from section 11.7.3 of \cite{BL04}, 
+    we perform a backtracking line search (see section 9.2 or \cite{BL04})
+    in order to guarantee decrease of the residual
+    $r(x^+, s_0^+, s_1^+, y^+, z_0^+, z_1^+, \mu)$ where,
+    \begin{subequations}\begin{align}
+    x^+ &= x + t \alpha_p p_x \\
+    s_0^+ &= s_0+t \alpha_p p_{s_0} \\
+    s_1^+ &= s_1+t \alpha_p p_{s_1} \\
+    y^+ &= y +\alpha_d p_y \\
+    z_0^+ &= z_0 + \alpha_d p_{z_0} \\
+    z_1^+ &= z_1+\alpha_d p_{z_1} 
+    \end{align}\end{subequations}
+    and,
+\begin{equation}
+    r(x, s_0, s_1, y, z_0, z_1, \mu) = 
+\left\|
+\begin{bmatrix}
+    \nabla f(x) - A^T y + h_0 + h_1 \\ A x - b
+\end{bmatrix}\right\|_2.
+\end{equation}
+The exit condition for the line search is 
+    \begin{equation} r(x^+, s_0^+, s_1^+, y^+, z_0^+, z_1^+, \mu) \le
+    (1-\alpha t) r(x, s_0, s_1, y, z_0, z_1, \mu).
+    \end{equation}
+where $t$ is initially set to $t = \alpha_p$.
+
+
+\begin{thebibliography}{99}
+\bibitem{NW04} Nocedal and Wright, 
+    Numerical Optimization, Second Edition (Cambridge 2004)
+\bibitem{BL04} Boyd and Vandenberghe,
+    Convex Optimization (Cambridge 2004)
+\end{thebibliography}
+\end{document}
