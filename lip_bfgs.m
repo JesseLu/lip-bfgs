@@ -1,5 +1,5 @@
 function [] = lip_bfgs(grad, x, l, u, A, b, ...
-                        mu_0, sigma, tau, eta, alpha, beta, err_tol, t_min)
+                        tau, eta, alpha, beta, err_tol, t_min, n_max)
 % L-BFGS Interior-Point algorithm.
 % Assumes A is fat and has linearly independent rows.
 
@@ -42,6 +42,15 @@ phi = @(g, x, s0, s1, y, z0, z1, mu, alpha_prim, alpha_dual, p, t) ...
                     z0 + 1 * alpha_dual * p.z0, ...
                     z1 + 1 * alpha_dual * p.z1, mu));
 
+phi = @(g, x, s0, s1, y, z0, z1, mu, alpha_prim, alpha_dual, p, t) ...
+    norm(kkt_res(   g, ...
+                    x + t * alpha_prim * p.x, ...
+                    s0 + t * alpha_prim * p.s0, ...
+                    s1 + t * alpha_prim * p.s1, ...
+                    y + 1 * alpha_dual * p.y, ...
+                    z0 + 1 * alpha_dual * p.z0, ...
+                    z1 + 1 * alpha_dual * p.z1, mu));
+
 % Helper to calculate different components of p
 calc_p_xy = @(p) struct(    'x', p(1:length(x)), ...
                             'y', -p(length(x) + [1:length(y)]));
@@ -63,10 +72,9 @@ hist.err(1) = err(g, x, s0, s1, y, z0, z1, 0);
 hist.t(1) = nan;
 hist.grad_evals(1) = 1;
 hist.search_fail(1) = false;
-hist.mu = mu_0;
-n_max = 10;
+mu = hist.err(1) / eta / sqrt(n);
+hist.mu = mu;
 h = [];
-mu = mu_0;
 
 start_time = tic;
 t_disp = 1;
@@ -79,7 +87,6 @@ while hist.err(end) > err_tol
     W = [W; zeros(size(A, 1), size(W, 2))];
 
     % Obtain search direction (p).
-    g = grad(x);
     p = arrow_solve(delta + z0./s0 + z1./s1, A, -W*M, W, ...
         -kkt_res(g, x, s0, s1, y, z0, z1, mu));
 
@@ -95,6 +102,7 @@ while hist.err(end) > err_tol
     alpha_dual = f2b_rule([p.z0; p.z1], [z0; z1]);
 
     % Perform a backtracking (Armijo) line search.
+        % pause
     [g, t, hist.grad_evals(end+1), hist.search_fail(end+1)] = my_backtrack_linesearch(...
         @(t) grad(x + t * alpha_prim * p.x), ...
         @(g, t) ...
@@ -102,7 +110,8 @@ while hist.err(end) > err_tol
         g, ...
         1.0, alpha, beta, t_min);
     if (hist.search_fail(end) == true) % Restart BFGS.
-        h = []
+        h = [];
+        fprintf('Iteration %d\n', length(hist.err));
         t = 0;
     else
         % Update variables.
@@ -167,6 +176,7 @@ while f(g, t) > (1 - alpha * t) * f0
     grad_evals = grad_evals + 1;
     if (t <= t_min) 
         warning('Backtracking line search failed.');
+        t = nan;
         search_fail = true;
         return
     end

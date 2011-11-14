@@ -1,0 +1,2 @@
+Stopping for now, because can't see a good way of getting non-convex
+objective functions to minimize.

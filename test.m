@@ -9,11 +9,11 @@ randn('state', 1);
     %
 
 % Function to minimize (quadratic, convex).
-A = spdiags(randn(n, 5), -2:2, n, n);  % Use sparse matrix to speed things up.
-A = A' * A;
+A = 0*speye(n) + spdiags(randn(n, 7), -3:3, n, n);  % Use sparse matrix to speed things up.
+% A = A' * A;
 % A = randn(n);
 b = randn(n, 1);
-fun.f = @(x) 0.5 * x' * (A * x - b);
+% fun.f = @(x) x' * (A * x - b);
 fun.g = @(x) (A * x - b);
 % fun.h = @(x) A' * A;
 
@@ -30,4 +30,5 @@ u = ones(n, 1);
 
 subplot 111;
 lip_bfgs(fun.g, 0.5 * ones(n, 1), l, u, A_eq, b_eq, ...
-    1, 0.1, 0.995, 10, 1e-4, 0.5, err_tol, 1e-3);
+    0.995, 1e0, 1e-4, 0.5, err_tol, 1e-3, 5);
+ 

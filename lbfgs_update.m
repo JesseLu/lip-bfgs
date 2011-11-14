@@ -55,7 +55,7 @@ function [delta, M, W, h] = lbfgs_update(x, g, n_max, h)
 if isempty(h) 
     % Components of the quasi-Newton approximation.
     delta = 1; % For restart, we simply guess a scaling value of 1.
-    W = zeros(length(x),0);
+    W = zeros(length(x), 0);
     M = zeros(0);
 
     % Initialize the history structure.
@@ -64,12 +64,15 @@ if isempty(h)
     h.Y = zeros(length(x), n_max); % Corresponds to Y in the reference.
     h.x_prev = x; % Used to calculate s for next iteration.
     h.g_prev = g; % Used to calculate y for next iteration.
+    h.delta = delta; % Store these in case we need to damp the next update.
+    h.W = W; 
+    h.M = M; 
     return
 end
 
 
     %
-    % Calculate currest values of s and y. 
+    % Calculate current values of s and y. 
     %
 
 s = x - h.x_prev;
@@ -95,11 +98,26 @@ else % History full, delete oldest entry.
 end
 h.n = n;
 
-% Check curvature condition.
-if ((s' * y) <= 0)
-    error('Curvature condition broken (s dot y = %e)!', (s' * y));
-    % TODO (safeguard): Replace y (damped update) when condition is broken.
-end
+
+    %
+    % Check curvature condition, and damp update if needed.
+    %
+
+% Compute Bs.
+sy = s' * y;
+Bs = h.delta * s - h.W * h.M * h.W' * s;
+sBs = s' * Bs;
+
+
+% % Check curvature condition.
+% if (sy <= 0.2 * sBs)
+%     warning('Curvature condition broken (s dot y = %e)!', (s' * y));
+%     
+%     % Apply damped update (Chapter 18.3 of Reference).
+%     theta = 0.8 * sBs / (sBs - sy);
+%     y = theta * y + (1 - theta) * Bs; % Replace y.
+% end
+fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
 
 % Insert new values of s and y into the history.
 h.S(:,n) = s;
@@ -135,3 +153,6 @@ M = inv([delta*h.S_dot_S, h.L; h.L', diag(-h.d)]);
 
 W = [delta*h.S(:, 1:n), h.Y(:, 1:n)];
 
+h.delta = delta;
+h.W = W; % Store these in case we need to damp the next update.
+h.M = M; 
