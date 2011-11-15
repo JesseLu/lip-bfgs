@@ -85,7 +85,7 @@ cnt_display = 0;
 
 while hist.err(end) > err_tol
     % while hist.err_mu(end) >= (mu * eta)
-    if (any(z0) < 0) || (any(z1) < 0) || (any(s0) < 0) || (any(s1) < 0)
+    if (any(z0 < 0) || any(z1 < 0) || any(s0 < 0) || any(s1 < 0))
         error('negative s or z detected!');
     end
 
