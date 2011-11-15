@@ -1,5 +1,5 @@
 function [] = lip_bfgs(grad, x, l, u, A, b, ...
-                        tau, eta, alpha, beta, err_tol, t_min, n_max)
+                        mu_0, mu_m, tau, eta, alpha, beta, err_tol, t_min, n_max)
 % L-BFGS Interior-Point algorithm.
 % Assumes A is fat and has linearly independent rows.
 
@@ -24,24 +24,26 @@ kkt_res = @(g, x, s0, s1, y, z0, z1, mu) cat(1, ...
                         + z1 - (z1 ./ s1) .* (u - x) + mu * s1.^-1, ...
                         A * x - b);
 % Error function.
-err = @(g, x, s0, s1, y, z0, z1, mu) 1/sqrt(n) * max(cat(1, ...
+err0 = @(g, x, s0, s1, y, z0, z1, mu) 1/sqrt(n) * max(cat(1, ...
                         norm(g - A' * y - z0 + z1), ...
                         norm(s0 .* z0 - mu), ...
                         norm(s1 .* z1 - mu), ...
                         norm(A * x - b), ...
                         norm(x - l - s0), ...
                         norm(u - x - s1)));
+% 
+% % Merit function.
+% phi = @(g, x, s0, s1, y, z0, z1, mu, alpha_prim, alpha_dual, p, t) ...
+%     (err(   g, ...
+%                     x + t * alpha_prim * p.x, ...
+%                     s0 + t * alpha_prim * p.s0, ...
+%                     s1 + t * alpha_prim * p.s1, ...
+%                     y + 1 * alpha_dual * p.y, ...
+%                     z0 + 1 * alpha_dual * p.z0, ...
+%                     z1 + 1 * alpha_dual * p.z1, mu));
 
-% Merit function.
-phi = @(g, x, s0, s1, y, z0, z1, mu, alpha_prim, alpha_dual, p, t) ...
-    (err(   g, ...
-                    x + t * alpha_prim * p.x, ...
-                    s0 + t * alpha_prim * p.s0, ...
-                    s1 + t * alpha_prim * p.s1, ...
-                    y + 1 * alpha_dual * p.y, ...
-                    z0 + 1 * alpha_dual * p.z0, ...
-                    z1 + 1 * alpha_dual * p.z1, mu));
-
+err = @(g, x, s0, s1, y, z0, z1, mu) ...
+    norm(kkt_res(g, x, s0, s1, y, z0, z1, mu));
 phi = @(g, x, s0, s1, y, z0, z1, mu, alpha_prim, alpha_dual, p, t) ...
     norm(kkt_res(   g, ...
                     x + t * alpha_prim * p.x, ...
@@ -72,18 +74,21 @@ hist.err(1) = err(g, x, s0, s1, y, z0, z1, 0);
 hist.t(1) = nan;
 hist.grad_evals(1) = 1;
 hist.search_fail(1) = false;
-mu = hist.err(1) / eta / sqrt(n);
+mu = hist.err / eta;
+hist.err_mu(1) = err(g, x, s0, s1, y, z0, z1, 0);
 hist.mu = mu;
 h = [];
 
 start_time = tic;
-t_disp = 1;
+t_disp = 0.2;
 cnt_display = 0;
 
 while hist.err(end) > err_tol
+    % while hist.err_mu(end) >= (mu * eta)
 
     % L-BFGS approximation of Hessian function.
-    [delta, M, W, h] = lbfgs_update(x, grad(x), n_max, h); 
+    [delta, M, W, h] = sr1_update(x, grad(x), n_max, h); 
+    % [delta, M, W, h] = lbfgs_update(x, grad(x), n_max, h); 
     W = [W; zeros(size(A, 1), size(W, 2))];
 
     % Obtain search direction (p).
@@ -111,7 +116,7 @@ while hist.err(end) > err_tol
         1.0, alpha, beta, t_min);
     if (hist.search_fail(end) == true) % Restart BFGS.
         h = [];
-        fprintf('Iteration %d\n', length(hist.err));
+        % fprintf('Iteration %d\n', length(hist.err));
         t = 0;
     else
         % Update variables.
@@ -125,32 +130,39 @@ while hist.err(end) > err_tol
 
 
     % Calculate error.
-    hist.err(end+1) = err(g, x, s0, s1, y, z0, z1, 0);
+    hist.err(end+1) = err0(g, x, s0, s1, y, z0, z1, 0);
+    hist.err_mu(end+1) = err(g, x, s0, s1, y, z0, z1, 0);
     hist.t(end+1) = t;
     hist.mu(end+1) = mu;
 
     % Update mu.
-    if ((hist.err(end) / eta / sqrt(n)) <= mu)
-        mu = hist.err(end) / eta / sqrt(n);
+    if ((hist.err(end) / eta) <= mu)
+        mu = hist.err(end) / eta;
     end
 
     % Output progress.
     if (toc(start_time) - cnt_display * t_disp > t_disp)
         if (cnt_display == 0)
-            fprintf('Iter#    Gevals        Error        Mu\n');
-            fprintf('-----    ------        -----        --\n');
+            fprintf('Iter#    Gevals        Error        Errmu        Mu\n');
+            fprintf('-----    ------        -----        -----        --\n');
         end
 
-        fprintf('%5d    %6d   %1.4e   %1.1e\n', ...
-            length(hist.err) - 1, sum(hist.grad_evals), hist.err(end), hist.mu(end));
+        fprintf('%5d    %6d   %1.4e   %1.4e   %1.1e\n', ...
+            length(hist.err) - 1, sum(hist.grad_evals), hist.err(end), ...
+            hist.err_mu(end), hist.mu(end));
         cnt_display = cnt_display + 1;
-        semilogy(cumsum(hist.grad_evals), [hist.err; hist.t]', '.-');
+        subplot 211; semilogy(cumsum(hist.grad_evals), [hist.err; hist.err_mu; hist.t]', '.-');
+        subplot 212; plot(x, '.-');
         drawnow
     end
+%     end
+%     mu = mu / mu_m;
+    % pause
 end
 run_time = toc(start_time);
 
-        semilogy(cumsum(hist.grad_evals), [hist.err; hist.t]', '.-');
+        subplot 211; semilogy(cumsum(hist.grad_evals), [hist.err; hist.err_mu; hist.t]', '.-');
+        subplot 212; plot(x, '.-');
         drawnow
 % % Plot results.
 % semilogy(0:length(hist.err)-1, [hist.err; hist.t]', '.-');
@@ -175,7 +187,7 @@ while f(g, t) > (1 - alpha * t) * f0
     g = grad(t);
     grad_evals = grad_evals + 1;
     if (t <= t_min) 
-        warning('Backtracking line search failed.');
+        % warning('Backtracking line search failed.');
         t = nan;
         search_fail = true;
         return

@@ -1,4 +1,4 @@
-function [delta, M, W, h] = lbfgs_update(x, g, n_max, h)
+function [delta, M, W, h] = sr1_update(x, g, n_max, h)
 % [DELTA, M, W, HIST] = LBFGS_UPDATE(X, G, N_MAX, HIST)
 % 
 % Description
@@ -86,6 +86,20 @@ y = g - h.g_prev;
 h.x_prev = x;
 h.g_prev = g;
 
+% % Compute Bs.
+% yBs = y - (h.delta * s - h.W * (h.M * (h.W' * s)));
+% syBs = s' * yBs;
+% 
+% % Decide whether or not to skip update.
+% if norm(syBs) < 1e-8 * norm(s) * norm(yBs)
+%     warning('Skipped SR1 update.');
+%     delta = h.delta;
+%     M = h.M;
+%     W = h.W;
+%     return
+% end
+
+%
 if h.n < n_max % History not full.
     n = h.n + 1;
 else % History full, delete oldest entry.
@@ -99,25 +113,21 @@ end
 h.n = n;
 
 
-    %
-    % Check curvature condition, and damp update if needed.
-    %
-
-% Compute Bs.
-sy = s' * y;
-Bs = h.delta * s - h.W * (h.M * (h.W' * s));
-sBs = s' * Bs;
-
-
-% Check curvature condition.
-if (sy <= 0.2 * sBs)
-    % warning('Curvature condition broken (s dot y = %e)!', (s' * y));
-    
-    % Apply damped update (Chapter 18.3 of Reference).
-    theta = 0.8 * sBs / (sBs - sy);
-    y = theta * y + (1 - theta) * Bs; % Replace y.
-end
-% fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
+%     %
+%     % Check curvature condition, and damp update if needed.
+%     %
+% 
+ 
+% 
+% % Check curvature condition.
+% if (sy <= 0.2 * sBs)
+%     % warning('Curvature condition broken (s dot y = %e)!', (s' * y));
+%     
+%     % Apply damped update (Chapter 18.3 of Reference).
+%     theta = 0.8 * sBs / (sBs - sy);
+%     y = theta * y + (1 - theta) * Bs; % Replace y.
+% end
+% % fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
 
 % Insert new values of s and y into the history.
 h.S(:,n) = s;
@@ -149,9 +159,9 @@ h.L(n, 1:n) = [s_dot_y(1:n-1), 0]; % Lower-diagonal matrix.
 delta = norm(y)^2 / s_dot_y(n); % Scaling factor.
 
 % Use matrix inverse, since M is a square matrix of size (2*n_max) x (2*n_max).
-M = inv([delta*h.S_dot_S, h.L; h.L', diag(-h.d)]);
+M = -inv(-delta*h.S_dot_S + h.L + h.L' + diag(h.d));
 
-W = [delta*h.S(:, 1:n), h.Y(:, 1:n)];
+W = h.Y(:, 1:n) - delta*h.S(:, 1:n);
 
 h.delta = delta;
 h.W = W; % Store these in case we need to damp the next update.
