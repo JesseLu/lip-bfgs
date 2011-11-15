@@ -85,15 +85,22 @@ cnt_display = 0;
 
 while hist.err(end) > err_tol
     % while hist.err_mu(end) >= (mu * eta)
+    if (any(z0) < 0) || (any(z1) < 0) || (any(s0) < 0) || (any(s1) < 0)
+        error('negative s or z detected!');
+    end
 
     % L-BFGS approximation of Hessian function.
-    [delta, M, W, h] = sr1_update(x, grad(x), n_max, h); 
-    % [delta, M, W, h] = lbfgs_update(x, grad(x), n_max, h); 
+    % [delta, M, W, h] = sr1_update(x, grad(x), n_max, h); 
+    [delta, M, W, h] = lbfgs_update(x, grad(x), n_max, h); 
     W = [W; zeros(size(A, 1), size(W, 2))];
 
     % Obtain search direction (p).
     p = arrow_solve(delta + z0./s0 + z1./s1, A, -W*M, W, ...
         -kkt_res(g, x, s0, s1, y, z0, z1, mu));
+    if isempty(h)
+        p = -g;
+    end
+
 
     % Split up p into various components.
     p = calc_p_xy(p);

@@ -163,6 +163,14 @@ M = -inv(-delta*h.S_dot_S + h.L + h.L' + diag(h.d));
 
 W = h.Y(:, 1:n) - delta*h.S(:, 1:n);
 
+% Recalculate delta to made sure we produce a positive definite approximation.
+min_eig1 = min(real(eig(delta*eye(size(W,1)) - W * M * W')))
+if (min_eig1 < 1)
+    
+    delta = delta + (1 - min_eig1)
+min_eig2 = min(real(eig(delta*eye(size(W,1)) - W * M * W')))
+% pause
+end
 h.delta = delta;
 h.W = W; % Store these in case we need to damp the next update.
 h.M = M; 
