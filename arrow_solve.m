@@ -34,7 +34,7 @@ function [x] = my_block_elim(d, A, b)
 b1 = b(1:size(A,2),:);
 b2 = b(size(A,2)+1:end,:);
 
-D_inv = spdiags(d.^-1, 0, length(d), length(d)); % Inverse of diagonal block.
+D_inv = sparse(1:length(d), 1:length(d), d.^-1, length(d), length(d)); % Inverse of diagonal block.
 S_inv = -inv(full(A * D_inv * A')); % Inverse Schur complement (1,1 block).
 
 x2 = S_inv * (b2 - A * D_inv * b1); % Solve for lower block.

@@ -14,10 +14,12 @@ A = spdiags((randn(n, 15)), -7:7, n, n);  % Use sparse matrix to speed things up
 % A = randn(n);
 Ahat = A' * A;
 % A = randn(n);
-b = 3*randn(n, 1);
+b = 1*randn(n, 1);
 % fun.f = @(x) x' * (A * x - b);
-fun.g = @(x) A * x - b;
+fun.g = @(x) Ahat * x - b;
 % fun.h = @(x) A' * A;
+tic
+Ahat \ b; toc
 
 fun.f_cvx = @(x) norm(A * x - b);
 
