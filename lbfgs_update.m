@@ -117,7 +117,7 @@ if (sy <= 0.2 * sBs)
     theta = 0.8 * sBs / (sBs - sy);
     y = theta * y + (1 - theta) * Bs; % Replace y.
 end
-% fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
+fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
 
 % Insert new values of s and y into the history.
 h.S(:,n) = s;

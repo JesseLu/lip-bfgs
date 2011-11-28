@@ -15,15 +15,30 @@ for mu = 10.^[0:-1:-4]
 %         % Direct solve of the full Hessian.
 %         p = H(x, mu) \ -g(x, mu);
 
-        % Determine p using quasi-newton approximation.
-        [delta, M, W, h] = lbfgs_update(x, g(x, 0), n_max, h);
-        p = arrow_solve(delta + mu * ((u - x).^-2 + (x - l).^-2), ...
-            zeros(0, n), -W * M, W, -g(x, mu));
+%         % Determine p using quasi-newton approximation.
+%         [delta, M, W, h] = lbfgs_update(x, g(x, 0), n_max, h);
+%         p = arrow_solve(delta + mu * ((u - x).^-2 + (x - l).^-2), ...
+%             zeros(0, n), -W * M, W, -g(x, mu));
+% 
+%         A = -W * M * W' + ...
+%             spdiags(delta + mu * ((u - x).^-2 + (x - l).^-2), 0, n, n);
+%         min(real(eig(full(A))))
 
-        [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, p);
+        [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, -1e-0 * g(x, mu));
+        if isnan(t)
+            x
+            -g(x, mu)
+            error('arr');
+            h = [];
+            p = -g(x, mu);
+            [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, p);
+            if isnan(t)
+                error('hmm');
+            end
+        end
 
         cnt = cnt + 1;
-        fprintf('%d: %e (%e)\n', cnt, phi(x, mu), t);
+        fprintf('%d: %e %e (%e)\n', cnt, f(x, mu), phi(x, mu), t);
         if (phi(x, mu) < 1e-3)
             break
         end
@@ -35,14 +50,16 @@ end
 % f2b_rule = @(pz, z) min([1; my_pos(-tau*z./pz)]);
 
 function [x, t] = backtrack(f, g, x, p)
-alpha = 1e-3;
+alpha = 1e-4;
 beta = 0.5;
 t = 1;
 
 while f(x) + t * alpha * g(x) <= f(x + t * p)
     t = t * beta;
-    if (t <= 1e-6)
-        error('Backtrack fail.');
+    if (t <= 1e-15)
+        warning('Backtrack fail.');
+        t = nan;
+        return
     end
     % fprintf('%e\n', f(x + t * p) - f(x));
 end

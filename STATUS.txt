@@ -1,1 +1,8 @@
 Trying out primal search direction.
+
+TODO
+----
+
+1.  Fix error where line search fails when near a border.
+    Try plotting what the line search is seeing.
+    If backtracking is not good enough, why not use the More-Thuente line search?
