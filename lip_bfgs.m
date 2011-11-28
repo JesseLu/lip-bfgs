@@ -9,7 +9,8 @@ phi = @(x, mu) norm(g(x, mu));
 
 h = [];
 n_max = 3;
-for mu = 10.^[0:-1:-3]
+cnt = 0;
+for mu = 10.^[0:-1:-4]
     while true
 %         % Direct solve of the full Hessian.
 %         p = H(x, mu) \ -g(x, mu);
@@ -17,11 +18,12 @@ for mu = 10.^[0:-1:-3]
         % Determine p using quasi-newton approximation.
         [delta, M, W, h] = lbfgs_update(x, g(x, 0), n_max, h);
         p = arrow_solve(delta + mu * ((u - x).^-2 + (x - l).^-2), ...
-            zeros(0, n), W * M, W, -g(x, mu));
+            zeros(0, n), -W * M, W, -g(x, mu));
 
         [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, p);
 
-        fprintf('%e (%e)\n', phi(x, mu), t);
+        cnt = cnt + 1;
+        fprintf('%d: %e (%e)\n', cnt, phi(x, mu), t);
         if (phi(x, mu) < 1e-3)
             break
         end
@@ -39,7 +41,7 @@ t = 1;
 
 while f(x) + t * alpha * g(x) <= f(x + t * p)
     t = t * beta;
-    if (t <= 1e-3)
+    if (t <= 1e-6)
         error('Backtrack fail.');
     end
     % fprintf('%e\n', f(x + t * p) - f(x));
