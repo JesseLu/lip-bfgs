@@ -1,4 +1,4 @@
-function [] = lip_bfgs(fun, x, l, u)
+function [x, hist] = lip_bfgs(fun, x, l, u, n_max, mu_progress, alpha, beta)
 
 n = length(x);
 
@@ -8,62 +8,78 @@ H = @(x, mu) fun.H(x) + mu * spdiags((u - x).^-2 + (x - l).^-2, 0, n, n);
 phi = @(x, mu) norm(g(x, mu)) / sqrt(n);
 
 h = [];
-n_max = 10;
 cnt = 0;
-for mu = 10.^[4:-1:-4]
+start_time = tic;
+prev_time = 0;
+for mu = mu_progress
     while true
         % Direct solve of the full Hessian.
         p = H(x, mu) \ -g(x, mu);
 
         % Determine p using quasi-newton approximation.
-        [delta, M, W, h] = lbfgs_update(x, g(x, 0), n_max, h);
+        [delta, M, W, h, is_damp, is_restart] = ...
+            lbfgs_update(x, g(x, 0), n_max, h);
         p = arrow_solve(delta + mu * ((u - x).^-2 + (x - l).^-2), ...
             zeros(0, n), -W * M, W, -g(x, mu));
 
-%         A = -W * M * W' + ...
-%             spdiags(delta + mu * ((u - x).^-2 + (x - l).^-2), 0, n, n);
-        % min(real(eig(full(A))))
+        % Perform backtracking line search.
+        [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, p, alpha, beta, 1);
 
-        [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, p); %-1e-0 * g(x, mu));
-%         if isnan(t)
-%             g0 = g(x, mu);
-%             f0 = f(x, mu);
-%             t = [-1 : 1e-3 : 1] * 1e-3;
-%             for k = 1 : length(t)
-%                 y(k) = f(x - t(k) * g0, mu) - f0;
-%             end
-%             plot(t, [y; -1e-1 * t]', '.-');
-%             return
-%         end
-        if isnan(t)
+        if isnan(t) % If line search failed, restart quasi-Newton approximation.
             h = [];
-            p = -g(x, mu);
-            [x, t] = backtrack(@(x) f(x, mu), @(x) g(x, mu), x, p);
-            if isnan(t)
-                error('hmm');
-            end
         end
 
-        cnt = cnt + 1;
-        fprintf('%d: %e %e (%e) [%e]\n', cnt, f(x, mu), phi(x, mu), t, mu);
-        if (phi(x, mu) < 1e-3)
+        % Store algorithm progress.
+        cnt = cnt + 1; % Counter variable.
+        hist.fval(cnt) = f(x, 0);
+        hist.err(cnt) = phi(x, mu);
+        hist.mu(cnt) = mu;
+        hist.t(cnt) = t;
+        hist.is_damp(cnt) = is_damp;
+        hist.is_restart(cnt) = is_restart;
+
+        % Output progress information
+        if (toc(start_time) - prev_time > 1) % Do this every ~1 second. 
+            if (prev_time == 0)
+                fprintf('iter#       fval           mu          err        step len\n');
+                fprintf('-----    ----------    ---------    ---------    ---------\n');
+            end
+            prev_time = toc(start_time);
+            fprintf('%5d    %+1.3e    %1.3e    %1.3e    %1.3e\n', ...
+                cnt, hist.fval(cnt), hist.mu(cnt), hist.err(cnt), hist.t(cnt));
+
+            % Plot information.
+            subplot(1, 3, 1); plot(hist.fval, '.-');
+            subplot(1, 3, [2 3]); semilogy([hist.mu; hist.err; hist.t]', '.-');
+            hold on; semilogy(hist.t .* hist.is_damp, 'k.'); hold off;
+            hold on; semilogy(hist.t .* hist.is_restart, 'mo'); hold off;
+            drawnow;
+        end
+
+        if (phi(x, mu)*1 < mu)
             break
         end
     end
-    fprintf('%e [%e]\n\n', phi(x, mu), mu);
 end
-% % Fraction-to-boundary rule (for inequality constraint).
-% my_pos = @(z) (z > 0) .* z + (z <= 0) * 1; % If negative, set to 1.
-% f2b_rule = @(pz, z) min([1; my_pos(-tau*z./pz)]);
 
-function [x, t] = backtrack(f, g, x, p)
-alpha = 1e-4;
-beta = 0.5;
-t = 1;
+    %
+    % Print out results.
+    %
+
+fprintf('%5d    %+1.3e    %1.3e    %1.3e    %1.3e    (%1.1f secs)\n', cnt, ...
+    hist.fval(cnt), hist.mu(cnt), hist.err(cnt), hist.t(cnt), toc(start_time));
+subplot(1, 3, 1); plot(hist.fval, '.-');
+subplot(1, 3, [2 3]); semilogy([hist.mu; hist.err; hist.t]', '.-');
+            hold on; semilogy(hist.t .* hist.is_damp, 'k.'); hold off;
+            hold on; semilogy(hist.t .* hist.is_restart, 'mo'); hold off;
+
+
+
+function [x, t] = backtrack(f, g, x, p, alpha, beta, t)
 
 while f(x) + t * alpha * g(x) <= f(x + t * p)
     t = t * beta;
-    if (t <= 1e-15)
+    if (t <= 1e-6)
         warning('Backtrack fail.');
         t = nan;
         return

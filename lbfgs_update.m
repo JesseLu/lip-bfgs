@@ -1,4 +1,4 @@
-function [delta, M, W, h] = lbfgs_update(x, g, n_max, h)
+function [delta, M, W, h, is_damp, is_restart] = lbfgs_update(x, g, n_max, h)
 % [DELTA, M, W, HIST] = LBFGS_UPDATE(X, G, N_MAX, HIST)
 % 
 % Description
@@ -67,7 +67,11 @@ if isempty(h)
     h.delta = delta; % Store these in case we need to damp the next update.
     h.W = W; 
     h.M = M; 
+    is_damp = false;
+    is_restart = true;
     return
+else
+    is_restart = false;
 end
 
 
@@ -88,32 +92,13 @@ h.g_prev = g;
 
 if h.n < n_max % History not full.
     n = h.n + 1;
-    delta = h.delta;
-    M = h.M;
-    W = h.W;
 else % History full, delete oldest entry.
     n = n_max;
     h.S(:, 1:n_max-1) = h.S(:, 2:n_max);
     h.Y(:, 1:n_max-1) = h.Y(:, 2:n_max);
     h.d(:, 1:n_max-1) = h.d(2:n_max);
     h.L(1:n_max-1, 1:n_max-1) = h.L(2:n_max, 2:n_max);
-       h.S_dot_S(1:n_max-1, 1:n_max-1) = h.S_dot_S(2:n_max, 2:n_max);
-     
-        %
-        % Form delta, M, and W. 
-        % The compact representation of the L-BFGS approximation.
-        %
-
-%     delta = h.delta;
-% 
-%     % Use matrix inverse, since M is a square matrix of size (2*n_max) x (2*n_max).
-%     M = inv([delta*h.S_dot_S, h.L; h.L', diag(-h.d)]);
-% 
-%     W = [delta*h.S(:, 1:n), h.Y(:, 1:n)];
-
-    delta = h.delta;
-    M = h.M;
-    W = h.W;
+    h.S_dot_S(1:n_max-1, 1:n_max-1) = h.S_dot_S(2:n_max, 2:n_max);
 end
 h.n = n;
 
@@ -121,18 +106,9 @@ h.n = n;
     % Check curvature condition, and damp update if needed.
     %
 
-% if (real(s' * y) <= 0)
-%     % Skip update.
-%     delta = h.delta;
-%     M = h.M;
-%     W = h.W;
-%     fprintf('Skipped.\n');
-%     return
-% end
-
 % Compute Bs.
 sy = s' * y;
-Bs = delta * s - W * (M * (W' * s));
+Bs = h.delta * s - h.W * (h.M * (h.W' * s));
 sBs = s' * Bs;
 
 
@@ -143,8 +119,12 @@ if (sy < 0.2 * sBs)
     % Apply damped update (Chapter 18.3 of Reference).
     theta = 0.8 * sBs / (sBs - sy);
     y = theta * y + (1 - theta) * Bs; % Replace y.
+
+    is_damp = true;
+else
+    is_damp = false;
 end
-fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
+% fprintf('0.2 * sBs: %e , sy: %e\n', 0.2*sBs, s' * y);
 
 % Insert new values of s and y into the history.
 h.S(:,n) = s;
@@ -174,7 +154,6 @@ h.L(n, 1:n) = [s_dot_y(1:n-1), 0]; % Lower-diagonal matrix.
     %
 
 delta = norm(y)^2 / s_dot_y(n); % Scaling factor.
-s_dot_y(n)
 
 % Use matrix inverse, since M is a square matrix of size (2*n_max) x (2*n_max).
 M = inv([delta*h.S_dot_S, h.L; h.L', diag(-h.d)]);
